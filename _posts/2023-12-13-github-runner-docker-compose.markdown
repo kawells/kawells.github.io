@@ -2,7 +2,7 @@
 layout: post
 title:  "Automating Docker Compose Configuration Changes Using Github Workflow"
 date:   2023-12-13 19:11:00 -0800
-categories: github docker automation devops
+categories: docker
 ---
 I've been a big fan of using Docker (and Docker Compose) for years now — regularly running 20+ containers — but a minor annoyance that I've run into is managing a fleet of `docker-compose.yml` files.
 I currently run about 5 separate Docker Compose stacks. I prefer this approach because I can update a single stack without having to worry about affecting any of the containers within other stacks.
