@@ -30,6 +30,14 @@ github_username:  kawells
 
 # Build settings
 theme: minima
+#remote_theme: jekyll/minima
+minima:
+  skin: dark
+  social_links:
+    - { platform: github,  user_url: "https://github.com/kawells" }
+    - { platform: linkedin, user_url: "https://www.linkedin.com/in/kevwells" }
+disqus:
+  shortname: kwellsphoto
 plugins:
   - jekyll-feed
 
