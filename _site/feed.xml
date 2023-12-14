@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="3.9.3">Jekyll</generator><link href="http://localhost:4000/feed.xml" rel="self" type="application/atom+xml" /><link href="http://localhost:4000/" rel="alternate" type="text/html" /><updated>2023-12-13T20:03:12-08:00</updated><id>http://localhost:4000/feed.xml</id><title type="html">Commander of Code: A Tactical Guide to IT Content Operations</title><subtitle>Your go-to blog for expert guides in the ever-evolving realms of automation, PowerShell, Enterprise Content Management (ECM), and Docker.</subtitle><entry><title type="html">Automating Docker Compose Configuration Changes Using Github Workflow</title><link href="http://localhost:4000/github/docker/automation/devops/2023/12/13/github-runner-docker-compose.html" rel="alternate" type="text/html" title="Automating Docker Compose Configuration Changes Using Github Workflow" /><published>2023-12-13T19:11:00-08:00</published><updated>2023-12-13T19:11:00-08:00</updated><id>http://localhost:4000/github/docker/automation/devops/2023/12/13/github-runner-docker-compose</id><content type="html" xml:base="http://localhost:4000/github/docker/automation/devops/2023/12/13/github-runner-docker-compose.html">&lt;p&gt;I’ve been a big fan of using Docker (and Docker Compose) for years now — regularly running 20+ containers — but a minor annoyance that I’ve run into is managing a fleet of &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;docker-compose.yml&lt;/code&gt; files.
+I currently run about 5 separate Docker Compose stacks. I prefer this approach because I can update a single stack without having to worry about affecting any of the containers within other stacks.
+It also allows me to easily create a separate default Docker network for that stack.
+For example, my monitoring stack might include &lt;a href=&quot;https://uptime.kuma.pet/&quot;&gt;Uptime Kuma&lt;/a&gt;, &lt;a href=&quot;https://prometheus.io/&quot;&gt;Prometheus&lt;/a&gt;, and &lt;a href=&quot;https://grafana.com/&quot;&gt;Grafana&lt;/a&gt;.
+Let’s say I want to add &lt;a href=&quot;https://github.com/google/cadvisor&quot;&gt;cAdvisor&lt;/a&gt; to the stack.
+Normally, I’d have to SSH to my server, edit the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;monitor\docker-compose.yml&lt;/code&gt;, then run some Docker Compose commands to get everything running with the latest configuration.
+That’s too much work.
+Here’s a better way to automate Docker Compose configuration changes using a Github Workflow and a Github Runner.&lt;/p&gt;
+
+&lt;h1 id=&quot;store-your-configurations-in-a-repository&quot;&gt;Store Your Configurations in a Repository&lt;/h1&gt;
+
+&lt;p&gt;This website is running on Github Pages, so of course I’m going to shill for them here.
+If you aren’t doing so already, save any of your files that you’d like to push to your server(s) in their own repository on Github. For me, this includes all &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;YML&lt;/code&gt; files that Docker and any of my containers will use.
+Besides being able to push these configurations to the remote server, having the configs in a version-controlled repo will help us recover when we inevitably add a tab or incorrect indentation in our YML file and our stack accidentally disappears.&lt;/p&gt;
+
+&lt;p&gt;What I personally do is first clone my Github repo locally. I then use &lt;a href=&quot;https://code.visualstudio.com/&quot;&gt;VS Code&lt;/a&gt; to make any changes, then commit those changes. Now those changes are live in the repo, but how do we get them to the server?&lt;/p&gt;
+
+&lt;h1 id=&quot;install-a-github-actions-runner-on-the-server&quot;&gt;Install a Github Actions Runner on the Server&lt;/h1&gt;
+&lt;p&gt;If you’d like to keep it all in Docker, you can run a &lt;a href=&quot;https://github.com/myoung34/docker-github-actions-runner&quot;&gt;Github Actions Runner in Docker&lt;/a&gt;.
+That’s what I did on my Synology NAS, and it was straightforward.
+I used &lt;a href=&quot;https://oleksandrkirichenko.com/blog/github-runner-on-synology/&quot;&gt;this guide&lt;/a&gt; and had no issues.
+One important note is that your Github Actions Runner must have access to file paths that your Docker containers need access to.
+If any of your Docker containers require file system access, make sure that you mount those volumes using the same paths that the containers’ volumes are mounted using.
+After you do that, go back to Github and make sure that your runner shows as idle, and note the tags. My tags, for example, were &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;self-hosted&lt;/code&gt;,&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Linux&lt;/code&gt;,&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;X64&lt;/code&gt;, and &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;default&lt;/code&gt;.&lt;/p&gt;
+
+&lt;h1 id=&quot;setup-a-github-workflow&quot;&gt;Setup a Github Workflow&lt;/h1&gt;
+&lt;p&gt;This was both easier and a little more tedious than I expected, just because I have only ever used Azure DevOps pipelines prior to this. Here’s a sample &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;workflow.yml&lt;/code&gt; file to get you going, and I will explain what it means. You’ll have to save yours in your repository in the root directory within a &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;.github/workflows/&lt;/code&gt; folder. If it doesn’t already exist, create it.&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;name: push-docker-compose
+run-name: $ pushed config change to Docker
+on:
+  push:
+    branches:
+      - main
+    paths:
+      # Only run this when there is a commit involving a modified docker-compose.yml file
+      - &apos;*docker-compose.yml&apos;
+jobs:
+  update-docker-configs:
+    # Add an array of tags here that identify your runner. Especially useful if you have more than one runner/server that use the same repository
+    runs-on: [self-hosted, Linux, X64]
+    steps:
+      - name: Check out the repository to the runner
+        uses: actions/checkout@v4
+      - name: Get changed yml files
+        # This action will check for any changed docker-compose.yml files
+        uses: tj-actions/changed-files@v40
+        id: changed-yml-files
+        with:
+          files: |
+             *docker-compose.yml
+      - name: If changed docker compose yml files, update stack
+        if: steps.changed-yml-files.outputs.any_changed == &apos;true&apos;
+        # For each changed file, pull updated images and update the containers, then prune the docker images
+        run: |
+          for file in $; do
+            echo &quot;$file was changed&quot;
+            docker-compose -f $file pull
+            docker-compose -f $file up -d --remove-orphans
+          done
+          docker image prune -a -f
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;There you have it! Now, every time you commit a &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;docker-compose.yml&lt;/code&gt; to your repository, the Github Actions Runner will copy the repository to your server and update your Docker Compose configuration automatically!&lt;/p&gt;</content><author><name></name></author><category term="github" /><category term="docker" /><category term="automation" /><category term="devops" /><summary type="html">I’ve been a big fan of using Docker (and Docker Compose) for years now — regularly running 20+ containers — but a minor annoyance that I’ve run into is managing a fleet of docker-compose.yml files. I currently run about 5 separate Docker Compose stacks. I prefer this approach because I can update a single stack without having to worry about affecting any of the containers within other stacks. It also allows me to easily create a separate default Docker network for that stack. For example, my monitoring stack might include Uptime Kuma, Prometheus, and Grafana. Let’s say I want to add cAdvisor to the stack. Normally, I’d have to SSH to my server, edit the monitor\docker-compose.yml, then run some Docker Compose commands to get everything running with the latest configuration. That’s too much work. Here’s a better way to automate Docker Compose configuration changes using a Github Workflow and a Github Runner.</summary></entry><entry><title type="html">I’ve Started a Blog!</title><link href="http://localhost:4000/news/2023/12/13/ive-started-a-blog.html" rel="alternate" type="text/html" title="I’ve Started a Blog!" /><published>2023-12-13T18:33:00-08:00</published><updated>2023-12-13T18:33:00-08:00</updated><id>http://localhost:4000/news/2023/12/13/ive-started-a-blog</id><content type="html" xml:base="http://localhost:4000/news/2023/12/13/ive-started-a-blog.html">&lt;p&gt;Allow me to introduce myself! My name is Kevin Wells, and I am a Digital &amp;amp; IT Analyst at Parker Hannifin by day. I’ve been quickly gathering plenty of IT knowledge over the years, and I thought it would be a great time to share some of that knowledge with the Internet in a way that is more useful than private repository commits.&lt;/p&gt;
+
+&lt;p&gt;Outside of work, I occasionally freelance doing SEO. However, more often than not, I keep myself busy with automating my home lab setup. I plan on sharing my unbelievably wild adventures with automation, PowerShell, Enterprise Content Management (ECM), and Docker.&lt;/p&gt;</content><author><name></name></author><category term="news" /><summary type="html">Allow me to introduce myself! My name is Kevin Wells, and I am a Digital &amp;amp; IT Analyst at Parker Hannifin by day. I’ve been quickly gathering plenty of IT knowledge over the years, and I thought it would be a great time to share some of that knowledge with the Internet in a way that is more useful than private repository commits.</summary></entry></feed>
