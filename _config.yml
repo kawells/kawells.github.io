@@ -24,7 +24,7 @@ description: >- # this means to ignore newlines until "baseurl:"
   Your go-to blog for expert guides in the ever-evolving realms of automation,
   PowerShell, Enterprise Content Management (ECM), and Docker.
 baseurl: "" # the subpath of your site, e.g. /blog
-url: "https://kwellsphoto.com" # the base hostname & protocol for your site, e.g. http://example.com
+url: "https://blog.kwellsphoto.com" # the base hostname & protocol for your site, e.g. http://example.com
 linkedin_username: kevwells
 github_username:  kawells
 
